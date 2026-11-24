@@ -8,7 +8,7 @@ const REST = process.env.STORK_REST_URL || 'https://rest.jp.stork-oracle.network
 const WSS = process.env.STORK_WS_URL || 'wss://api.jp.stork-oracle.network/evm/subscribe';
 const ORIGINS = (process.env.ALLOWED_ORIGINS || '*').split(',').map(s => s.trim()).filter(Boolean);
 const ASSETS = new Set((process.env.ALLOWED_ASSETS || [
-  'SPCX_247_STORK','TSLA_247_STORK','AAPL_247_STORK','NVDA_247_STORK','XAGUSD_247_STORK','XAUUSD_247_STORK','QQQ_247_STORK','SPY_247_STORK',
+  'SPCX_247_STORK','ANT_247_STORK','TSLA_247_STORK','AAPL_247_STORK','NVDA_247_STORK','XAGUSD_247_STORK','XAUUSD_247_STORK','QQQ_247_STORK','SPY_247_STORK',
   'EURUSD','GBPUSD','USDJPY','USDCHF','AUDUSD','USDCAD','NZDUSD','BTCUSD','ETHUSD','COIN_24_5'
 ].join(',')).split(',').map(s => s.trim()).filter(Boolean));
 
