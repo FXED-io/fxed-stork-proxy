@@ -47,7 +47,10 @@ const histCache = new Map(), histInflight = new Map();
 async function history(symbol, resolution, from, to) {
   const step = RES[resolution];
   const ttl = Math.min(60000, step * 1000);
-  const f = Math.floor(from / step) * step, t = Math.ceil(to / step) * step;
+  const t = Math.ceil(to / step) * step;
+  // Stork rejects daily/weekly ranges over 365 days ("Request exceeds time range limit"): clamp them.
+  let f = Math.floor(from / step) * step;
+  if (step >= 86400) f = Math.max(f, t - Math.floor(365 * 86400 / step) * step);
   const key = `${symbol}|${resolution}|${f}|${t}`;
   const hit = histCache.get(key);
   if (hit && Date.now() - hit.at < ttl) return hit.body;
