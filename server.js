@@ -41,6 +41,31 @@ async function latest(assets) {
   return p;
 }
 
+// OHLC history (Stork /v1/tradingview/history), cached so browsers share one upstream call.
+const RES = { '1': 60, '5': 300, '15': 900, '60': 3600, '240': 14400, '1D': 86400, 'D': 86400, '1W': 604800, 'W': 604800 };
+const histCache = new Map(), histInflight = new Map();
+async function history(symbol, resolution, from, to) {
+  const step = RES[resolution];
+  const ttl = Math.min(60000, step * 1000);
+  const f = Math.floor(from / step) * step, t = Math.ceil(to / step) * step;
+  const key = `${symbol}|${resolution}|${f}|${t}`;
+  const hit = histCache.get(key);
+  if (hit && Date.now() - hit.at < ttl) return hit.body;
+  if (histInflight.has(key)) return histInflight.get(key);
+  const p = (async () => {
+    const q = new URLSearchParams({ symbol, resolution, from: String(f), to: String(t) });
+    const r = await fetch(`${REST}/v1/tradingview/history?${q}`, { headers: AUTH });
+    const body = { status: r.status, text: await r.text() };
+    if (r.ok) {
+      histCache.set(key, { at: Date.now(), body });
+      if (histCache.size > 500) histCache.delete(histCache.keys().next().value);
+    }
+    return body;
+  })().finally(() => histInflight.delete(key));
+  histInflight.set(key, p);
+  return p;
+}
+
 const server = http.createServer(async (req, res) => {
   cors(req, res);
   if (req.method === 'OPTIONS') { res.writeHead(204); return res.end(); }
@@ -54,6 +79,23 @@ const server = http.createServer(async (req, res) => {
     if (!assets.length) { res.writeHead(400, { 'Content-Type': 'application/json' }); return res.end('{"error":"no allowed assets"}'); }
     try {
       const b = await latest(assets);
+      res.writeHead(b.status, { 'Content-Type': 'application/json', 'Cache-Control': 'no-store' });
+      return res.end(b.text);
+    } catch (e) {
+      res.writeHead(502, { 'Content-Type': 'application/json' }); return res.end('{"error":"upstream"}');
+    }
+  }
+  if (url.pathname === '/v1/tradingview/history' && req.method === 'GET') {
+    const symbol = pick(url.searchParams.get('symbol'))[0];
+    const resolution = url.searchParams.get('resolution') || '';
+    const now = Math.floor(Date.now() / 1000);
+    const to = Math.min(Number(url.searchParams.get('to')) || now, now + 60);
+    const from = Number(url.searchParams.get('from'));
+    if (!symbol || !RES[resolution] || !Number.isFinite(from) || from <= 0 || from >= to || (to - from) / RES[resolution] > 1500) {
+      res.writeHead(400, { 'Content-Type': 'application/json' }); return res.end('{"error":"bad history request"}');
+    }
+    try {
+      const b = await history(symbol, resolution, from, to);
       res.writeHead(b.status, { 'Content-Type': 'application/json', 'Cache-Control': 'no-store' });
       return res.end(b.text);
     } catch (e) {
